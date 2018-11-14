@@ -15,4 +15,4 @@ RUN apk add --no-cache bash coreutils curl openssh-client openssl git findutils 
 COPY --from=build /kube-leaderelect /kube-leaderelect
 RUN ln -s /kube-leaderelect /usr/bin/kube-leaderelect
 
-ENTRYPOINT [ "/kube-leaderelect" ]
+ENTRYPOINT [ "/usr/bin/dumb-init","--","/kube-leaderelect" ]
