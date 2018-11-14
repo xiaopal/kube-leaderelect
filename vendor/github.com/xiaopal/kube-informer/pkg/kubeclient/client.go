@@ -1,8 +1,10 @@
 package kubeclient
 
 import (
+	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/spf13/pflag"
@@ -83,11 +85,15 @@ func (c *client) Namespace() string {
 
 func (c *client) DefaultNamespace() string {
 	c.ensure()
-	ns, _, err := c.clientConfig.Namespace()
-	if err != nil {
-		return "default"
+	if ns, _, _ := c.clientConfig.Namespace(); ns != "" {
+		return ns
 	}
-	return ns
+	if data, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace"); err == nil {
+		if ns := strings.TrimSpace(string(data)); ns != "" {
+			return ns
+		}
+	}
+	return "default"
 }
 
 func (c *client) GetConfig() (*rest.Config, error) {

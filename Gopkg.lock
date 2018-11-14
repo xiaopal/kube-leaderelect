@@ -144,7 +144,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:16cc4ada8b24d1b068f8f4b8c86eac3d26c55b7c0b486a198cc95cc12179fed2"
+  digest = "1:251a5efd05373ab079d0a4bc55914ee3d5e8e07b874bcc151f17b4332531b053"
   name = "github.com/xiaopal/kube-informer"
   packages = [
     "pkg/appctx",
@@ -152,7 +152,7 @@
     "pkg/leaderelect",
   ]
   pruneopts = "UT"
-  revision = "a7d5778fc885f8c6391d77948151f86eac7d6b7d"
+  revision = "d1302b6f63620bced1c69b13f8a8dda3d317d513"
 
 [[projects]]
   branch = "master"
