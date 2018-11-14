@@ -20,14 +20,10 @@ var (
 	kubeClient     kubeclient.Client
 	leaderHelper   leaderelect.Helper
 	handlerError   error
+	initialized    bool
 )
 
-func run(cmd *cobra.Command, args []string) error {
-	handlerCommand = args
-	if len(handlerCommand) == 0 {
-		return fmt.Errorf("handlerCommand required")
-	}
-
+func run() error {
 	app := appctx.Start()
 	defer app.End()
 
@@ -46,8 +42,15 @@ func runHandler(ctx context.Context) {
 func main() {
 	logger = log.New(os.Stderr, "[kube-leaderelect] ", log.Flags())
 	cmd := &cobra.Command{
-		Use:  fmt.Sprintf("%s [flags] handlerCommand args...", os.Args[0]),
-		RunE: run,
+		Use: fmt.Sprintf("%s [flags] handlerCommand args...", os.Args[0]),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			handlerCommand = args
+			if len(handlerCommand) == 0 {
+				return fmt.Errorf("handlerCommand required")
+			}
+			initialized = true
+			return nil
+		},
 	}
 	flags := cmd.Flags()
 	flags.AddGoFlagSet(flag.CommandLine)
@@ -63,5 +66,10 @@ func main() {
 
 	if err := cmd.Execute(); err != nil {
 		logger.Fatal(err)
+	}
+	if initialized {
+		if err := run(); err != nil {
+			logger.Fatal(err)
+		}
 	}
 }
