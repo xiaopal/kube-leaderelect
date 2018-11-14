@@ -86,7 +86,7 @@ func (h *helper) ensure() {
 			}
 		}
 		if h.LockObjectNamespace == "" {
-			if h.DefaultNamespaceFunc != nil {
+			if h.DefaultNamespaceFunc == nil {
 				h.DefaultNamespaceFunc = func() string { return "default" }
 			}
 			h.LockObjectNamespace = h.DefaultNamespaceFunc()
