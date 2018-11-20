@@ -59,12 +59,12 @@
   revision = "24818f796faf91cd76ec7bddd72458fbced7a6c1"
 
 [[projects]]
-  digest = "1:3a26588bc48b96825977c1b3df964f8fd842cd6860cc26370588d3563433cf11"
+  digest = "1:236d7e1bdb50d8f68559af37dbcf9d142d56b431c9b2176d41e2a009b664cda8"
   name = "github.com/google/uuid"
   packages = ["."]
   pruneopts = "UT"
-  revision = "d460ce9f8df2e77fb1ba55ca87fafed96c607494"
-  version = "v1.0.0"
+  revision = "9b3b1e0f5f99ae461456d768e7d301a7acdaa2d8"
+  version = "v1.1.0"
 
 [[projects]]
   digest = "1:65c4414eeb350c47b8de71110150d0ea8a281835b1f386eacaa3ad7325929c21"
@@ -144,7 +144,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:1cee13c9bbfb0e43701c420db0c815737888f341a87f0d390c5aeefcc797bedb"
+  digest = "1:a734048fb7295ed13f1d29c1e6e7460e9954e789f55a73a7391f244c39f93fc3"
   name = "github.com/xiaopal/kube-informer"
   packages = [
     "pkg/appctx",
@@ -152,7 +152,7 @@
     "pkg/leaderelect",
   ]
   pruneopts = "UT"
-  revision = "5417f79fe28fc569df90c7279f0ac2dce61cfa19"
+  revision = "a085064548472efcdd2220f098cee1f66143dbff"
 
 [[projects]]
   branch = "master"
@@ -175,7 +175,7 @@
     "idna",
   ]
   pruneopts = "UT"
-  revision = "88d92db4c548972d942ac2a3531a8a9a34c82ca6"
+  revision = "adae6a3d119ae4890b46832a2e88a95adc62b8e7"
 
 [[projects]]
   branch = "master"
@@ -190,14 +190,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6a875550c3b582f6c2d7e2ce44aba792511f00016d7c46b0a4fb26f730ef3058"
+  digest = "1:48b757e61d662021f49a6a0afc67dacae27ee0c3a8f858d927126bcdf49222d3"
   name = "golang.org/x/sys"
   packages = [
     "unix",
     "windows",
   ]
   pruneopts = "UT"
-  revision = "66b7b1311ac80bbafcd2daeef9a5e6e2cd1e2399"
+  revision = "ec83556a53fe16b65c452a104ea9d1e86a671852"
 
 [[projects]]
   digest = "1:a2ab62866c75542dd18d2b069fec854577a20211d7c0ea6ae746072a1dccdd18"
@@ -264,7 +264,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:bf61730197acc225b5153ba3eb3d7b87c01da71f98896d9855309f37be7743ca"
+  digest = "1:2d2f8ae5a583a56906f10cfa3784b0bf7376d0069765fb438fa0736d266a6439"
   name = "k8s.io/api"
   packages = [
     "admissionregistration/v1alpha1",
@@ -300,11 +300,11 @@
     "storage/v1beta1",
   ]
   pruneopts = "UT"
-  revision = "a33c8200050fc0751848276811abf3fc029b3133"
+  revision = "46ad728b8d13de6dffe4396623b098473f626e9e"
 
 [[projects]]
   branch = "master"
-  digest = "1:9ebef2d9256c543735dee43495c7e16082755c786e62c15713bf1fca2c6c89fa"
+  digest = "1:28b7fb9c124380483cd3ef43d4730a0d8d93289b780718358dbb2ef58d64816b"
   name = "k8s.io/apimachinery"
   packages = [
     "pkg/api/errors",
@@ -349,7 +349,7 @@
     "third_party/forked/golang/reflect",
   ]
   pruneopts = "UT"
-  revision = "2a7c9300402896b3c073f2f47df85527c94f83a0"
+  revision = "1b0702fe2927f82126da9c2ecf567f14676f6072"
 
 [[projects]]
   digest = "1:f974c5ad0f6945a5ca9cd36e7c99fea8830df3e64bb8d397284a97f1119bda61"
@@ -398,7 +398,7 @@
   name = "k8s.io/kube-openapi"
   packages = ["pkg/util/proto"]
   pruneopts = "UT"
-  revision = "c59034cc13d587f5ef4e85ca0ade0c1866ae8e1d"
+  revision = "0317810137be915b9cf888946c6e115c1bfac693"
 
 [[projects]]
   digest = "1:7719608fe0b52a4ece56c2dde37bedd95b938677d1ab0f84b8a7852e4c59f849"

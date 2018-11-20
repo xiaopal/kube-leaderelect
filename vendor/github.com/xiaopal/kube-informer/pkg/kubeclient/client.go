@@ -46,15 +46,16 @@ type client struct {
 //BindFlags func
 func (c *client) BindFlags(flags *pflag.FlagSet, envPrefix string) {
 	if c.KubeConfigPath == "" {
-		if c.KubeConfigPath = os.Getenv(envPrefix + "KUBECONFIG"); c.KubeConfigPath == "" {
-			if c.KubeConfigPath = os.Getenv("KUBECONFIG"); c.KubeConfigPath == "" {
+		defaultPath := os.Getenv(envPrefix + "KUBECONFIG")
+		if defaultPath == "" {
+			if defaultPath = os.Getenv("KUBECONFIG"); defaultPath == "" {
 				if home := os.Getenv("HOME"); home != "" {
-					defaultPath := filepath.Join(home, ".kube", "config")
-					if _, err := os.Stat(defaultPath); !os.IsNotExist(err) {
-						c.KubeConfigPath = defaultPath
-					}
+					defaultPath = filepath.Join(home, ".kube", "config")
 				}
 			}
+		}
+		if _, err := os.Stat(defaultPath); !os.IsNotExist(err) {
+			c.KubeConfigPath = defaultPath
 		}
 	}
 	flags.StringVar(&c.KubeConfigPath, "kubeconfig", c.KubeConfigPath, "path to the kubeconfig file")
