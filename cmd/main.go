@@ -9,9 +9,9 @@ import (
 	"os/exec"
 
 	"github.com/spf13/cobra"
-	"github.com/xiaopal/kube-informer/pkg/appctx"
-	"github.com/xiaopal/kube-informer/pkg/kubeclient"
-	"github.com/xiaopal/kube-informer/pkg/leaderelect"
+	"github.com/xiaopal/kube-leaderelect/pkg/appctx"
+	"github.com/xiaopal/kube-leaderelect/pkg/kubeclient"
+	"github.com/xiaopal/kube-leaderelect/pkg/leaderelect"
 )
 
 var (
@@ -20,7 +20,6 @@ var (
 	kubeClient     kubeclient.Client
 	leaderHelper   leaderelect.Helper
 	handlerError   error
-	initialized    bool
 )
 
 func run() error {
@@ -43,13 +42,15 @@ func main() {
 	logger = log.New(os.Stderr, "[kube-leaderelect] ", log.Flags())
 	cmd := &cobra.Command{
 		Use: fmt.Sprintf("%s [flags] handlerCommand args...", os.Args[0]),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		PreRunE: func(cmd *cobra.Command, args []string) error {
 			handlerCommand = args
 			if len(handlerCommand) == 0 {
 				return fmt.Errorf("handlerCommand required")
 			}
-			initialized = true
 			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return run()
 		},
 	}
 	flags := cmd.Flags()
@@ -66,10 +67,5 @@ func main() {
 
 	if err := cmd.Execute(); err != nil {
 		logger.Fatal(err)
-	}
-	if initialized {
-		if err := run(); err != nil {
-			logger.Fatal(err)
-		}
 	}
 }
