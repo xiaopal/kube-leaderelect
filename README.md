@@ -4,7 +4,7 @@
 ```
 CGO_ENABLED=0 GOOS=linux go build -o bin/kube-leaderelect -ldflags '-s -w' cmd/*.go
 bin/kube-leaderelect -h
-bin/kube-leaderelect --leader-elect=endpoints/sshd --endpoint-port=22 -- /usr/sbin/sshd -D
+bin/kube-leaderelect --leader-elect=endpoints/sshd --update-endpoints=:22 -- /usr/sbin/sshd -D
 
 ```
 

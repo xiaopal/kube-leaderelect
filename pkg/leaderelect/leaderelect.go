@@ -6,14 +6,18 @@ import (
 	"log"
 	"net"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"k8s.io/apimachinery/pkg/util/uuid"
 
 	"github.com/spf13/pflag"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -32,24 +36,35 @@ type HelperOpts struct {
 	LockObjectNamespace  string
 	GetConfigFunc        func() (*rest.Config, error)
 	DefaultNamespaceFunc func() string
-	EndpointIPs          []string
-	EndpointPorts        []int
-	EndpointProtocol     string
+	UpdateEndpoints      string
 }
 
 //Helper interface
 type Helper interface {
 	BindFlags(flags *pflag.FlagSet, envPrefix string)
 	Run(ctx context.Context, handler func(context.Context))
+	Identity() string
+	IsLeader() bool
+	GetLeader() string
 }
 
 //NewHelper func
 func NewHelper(opts *HelperOpts) Helper {
-	return &helper{*opts}
+	logger := log.New(os.Stderr, "[leader-election] ", log.Flags())
+	hostname, err := os.Hostname()
+	if err != nil {
+		logger.Fatalf("failed to get hostname: %v", err)
+	}
+	id := hostname + "_" + string(uuid.NewUUID())
+	return &helper{HelperOpts: *opts, identity: id, logger: logger}
 }
 
 type helper struct {
 	HelperOpts
+	atomic.Value
+	identity        string
+	logger          *log.Logger
+	endpointSubsets []apiv1.EndpointSubset
 }
 
 func envToDuration(key string, d time.Duration) time.Duration {
@@ -80,9 +95,7 @@ func (h *helper) BindFlags(flags *pflag.FlagSet, envPrefix string) {
 	flags.DurationVar(&h.LeaseDuration, "leader-elect-lease", h.LeaseDuration, "leader election: lease duration")
 	flags.DurationVar(&h.RenewDeadline, "leader-elect-renew", h.RenewDeadline, "leader election: renew deadline")
 	flags.DurationVar(&h.RetryPeriod, "leader-elect-retry", h.RetryPeriod, "leader election: retry period")
-	flags.StringSliceVar(&h.EndpointIPs, "endpoint-ip", h.EndpointIPs, "leader election: endpoint IPs")
-	flags.IntSliceVar(&h.EndpointPorts, "endpoint-port", h.EndpointPorts, "leader election: endpoint ports")
-	flags.StringVar(&h.EndpointProtocol, "endpoint-protocol", string(apiv1.ProtocolTCP), "leader election: endpoint ports protocol")
+	flags.StringVar(&h.UpdateEndpoints, "update-endpoints", "", "leader election: update endpoints, eg. :8080 or x.x.x.x:8088/TCP")
 }
 
 func (h *helper) ensure(logger *log.Logger) {
@@ -100,11 +113,37 @@ func (h *helper) ensure(logger *log.Logger) {
 			}
 			h.LockObjectNamespace = h.DefaultNamespaceFunc()
 		}
-		if len(h.EndpointPorts) > 0 && len(h.EndpointIPs) == 0 {
-			if ip, err := lookupHostIP(); err != nil {
-				logger.Printf("lookup host ip address: %v", err)
+		if h.UpdateEndpoints != "" {
+			if h.ResourceLock != resourcelock.EndpointsResourceLock {
+				logger.Fatalf("failed to parse: %s, require resourcelock=endpoints", h.UpdateEndpoints)
+			}
+			re := regexp.MustCompile(`^(?P<ip>[\.\d]+)?:(?P<port>\d+)(?:/(?P<protocol>\w+))?$`)
+			m := re.FindStringSubmatch(h.UpdateEndpoints)
+			if len(m) == 0 {
+				logger.Fatalf("failed to parse: %s", h.UpdateEndpoints)
+			}
+			ip, port, protocol, addrs, ports := m[1], m[2], m[3], []apiv1.EndpointAddress{}, []apiv1.EndpointPort{}
+			if ip == "" {
+				hostIP, err := lookupHostIP()
+				if err != nil {
+					logger.Printf("lookup host ip address: %v", err)
+				}
+				ip = hostIP
+			}
+			if ip != "" {
+				addrs = append(addrs, apiv1.EndpointAddress{IP: ip})
+			}
+			if protocol == "" {
+				protocol = "TCP"
+			}
+			if iport, err := strconv.Atoi(port); err == nil {
+				ports = append(ports, apiv1.EndpointPort{Port: int32(iport), Protocol: apiv1.Protocol(protocol)})
 			} else {
-				h.EndpointIPs = []string{ip}
+				logger.Fatalf("failed to parse: %s, illegal port", h.UpdateEndpoints)
+			}
+			h.endpointSubsets = []apiv1.EndpointSubset{}
+			if len(addrs) > 0 && len(ports) > 0 {
+				h.endpointSubsets = []apiv1.EndpointSubset{apiv1.EndpointSubset{Addresses: addrs, Ports: ports}}
 			}
 		}
 	}
@@ -127,7 +166,7 @@ func lookupHostIP() (string, error) {
 
 //Run func
 func (h *helper) Run(ctx context.Context, handler func(context.Context)) {
-	logger := log.New(os.Stderr, "[leader-election] ", log.Flags())
+	logger := h.logger
 	h.ensure(logger)
 	if !h.Enabled {
 		handler(ctx)
@@ -142,11 +181,7 @@ func (h *helper) Run(ctx context.Context, handler func(context.Context)) {
 	if err != nil {
 		logger.Fatalf("failed to get CoreV1 Client: %v", err)
 	}
-	hostname, err := os.Hostname()
-	if err != nil {
-		logger.Fatalf("failed to get hostname: %v", err)
-	}
-	id := hostname + "_" + string(uuid.NewUUID())
+	id := h.identity
 	broadcaster := record.NewBroadcaster()
 	lock, err := h.newResourceLock(
 		h.ResourceLock,
@@ -172,9 +207,9 @@ func (h *helper) Run(ctx context.Context, handler func(context.Context)) {
 		RetryPeriod:   h.RetryPeriod,
 		Callbacks: LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				logger.Printf("leader started: %s", id)
 				wg.Add(1)
 				defer wg.Done()
+				logger.Printf("leader started: %s", id)
 				handler(ctx)
 				leave()
 			},
@@ -193,26 +228,17 @@ func (h *helper) Run(ctx context.Context, handler func(context.Context)) {
 	if err != nil {
 		logger.Fatalf("failed to init leaderelector: %v", err)
 	}
+	h.Store(le)
 	le.Run(ctx)
 }
 
 func (h *helper) endpointsDirector(e *apiv1.Endpoints, ler resourcelock.LeaderElectionRecord) {
-	if len(h.EndpointIPs) == 0 && len(h.EndpointPorts) == 0 {
-		return
-	}
-	if ler.HolderIdentity != "" && len(h.EndpointIPs) > 0 && len(h.EndpointPorts) > 0 {
-		addrs, ports := make([]apiv1.EndpointAddress, len(h.EndpointIPs)),
-			make([]apiv1.EndpointPort, len(h.EndpointPorts))
-		for i, ip := range h.EndpointIPs {
-			addrs[i] = apiv1.EndpointAddress{IP: ip}
+	if subsets := h.endpointSubsets; subsets != nil {
+		e.Subsets = []apiv1.EndpointSubset{}
+		if ler.HolderIdentity != "" {
+			e.Subsets = subsets
 		}
-		for i, port := range h.EndpointPorts {
-			ports[i] = apiv1.EndpointPort{Port: int32(port), Protocol: apiv1.Protocol(h.EndpointProtocol)}
-		}
-		e.Subsets = []apiv1.EndpointSubset{apiv1.EndpointSubset{Addresses: addrs, Ports: ports}}
-		return
 	}
-	e.Subsets = []apiv1.EndpointSubset{}
 }
 
 func (h *helper) newResourceLock(lockType string, ns string, name string, client corev1.CoreV1Interface, rlc resourcelock.ResourceLockConfig) (resourcelock.Interface, error) {
@@ -239,4 +265,29 @@ func (h *helper) newResourceLock(lockType string, ns string, name string, client
 	default:
 		return nil, fmt.Errorf("Invalid lock-type %s", lockType)
 	}
+}
+
+// GetLeader returns the identity of the last observed leader or returns the empty string if
+// no leader has yet been observed.
+func (h *helper) GetLeader() string {
+	if le, ok := h.Load().(*LeaderElector); ok {
+		return le.GetLeader()
+	}
+	return ""
+}
+
+// IsLeader returns true if the last observed leader was this client else returns false.
+func (h *helper) IsLeader() bool {
+	if le, ok := h.Load().(*LeaderElector); ok {
+		return le.IsLeader()
+	}
+	return false
+}
+
+// Identity func
+func (h *helper) Identity() string {
+	if _, ok := h.Load().(*LeaderElector); ok {
+		return h.identity
+	}
+	return ""
 }
