@@ -95,7 +95,7 @@ func (h *helper) BindFlags(flags *pflag.FlagSet, envPrefix string) {
 	flags.DurationVar(&h.LeaseDuration, "leader-elect-lease", h.LeaseDuration, "leader election: lease duration")
 	flags.DurationVar(&h.RenewDeadline, "leader-elect-renew", h.RenewDeadline, "leader election: renew deadline")
 	flags.DurationVar(&h.RetryPeriod, "leader-elect-retry", h.RetryPeriod, "leader election: retry period")
-	flags.StringVar(&h.UpdateEndpoints, "update-endpoints", "", "leader election: update endpoints, eg. :8080 or x.x.x.x:8088/TCP")
+	flags.StringVar(&h.UpdateEndpoints, "update-endpoints", "", "leader election: update endpoints, eg. :8080 or x.x.x.x:8080-http/TCP,8443-https/TCP")
 }
 
 func (h *helper) ensure(logger *log.Logger) {
@@ -117,33 +117,49 @@ func (h *helper) ensure(logger *log.Logger) {
 			if h.ResourceLock != resourcelock.EndpointsResourceLock {
 				logger.Fatalf("failed to parse: %s, require resourcelock=endpoints", h.UpdateEndpoints)
 			}
-			re := regexp.MustCompile(`^(?P<ip>[\.\d]+)?:(?P<port>\d+)(?:/(?P<protocol>\w+))?$`)
+			re, rep := regexp.MustCompile(`^(?P<ips>[\.\d]+(?:,[\.\d]+)*)?:(?P<ports>\d+(?:-[-\w]+)?(?:/\w+)?(?:,\d+(?:-[-\w]+)?(?:/\w+)?)*)$`),
+				regexp.MustCompile(`^(?P<port>\d+)(?:-(?P<name>[-\w]+))?(?:/(?P<protocol>\w+))?$`)
 			m := re.FindStringSubmatch(h.UpdateEndpoints)
 			if len(m) == 0 {
 				logger.Fatalf("failed to parse: %s", h.UpdateEndpoints)
 			}
-			ip, port, protocol, addrs, ports := m[1], m[2], m[3], []apiv1.EndpointAddress{}, []apiv1.EndpointPort{}
-			if ip == "" {
-				hostIP, err := lookupHostIP()
-				if err != nil {
-					logger.Printf("lookup host ip address: %v", err)
+			ips, ports, eas, eps := m[1], m[2], []apiv1.EndpointAddress{}, []apiv1.EndpointPort{}
+			for _, ip := range strings.Split(ips, ",") {
+				ip = strings.TrimSpace(ip)
+				if ip == "" {
+					hostIP, err := lookupHostIP()
+					if err != nil {
+						logger.Printf("lookup host ip address: %v", err)
+						continue
+					}
+					ip = hostIP
 				}
-				ip = hostIP
+				eas = append(eas, apiv1.EndpointAddress{IP: ip})
 			}
-			if ip != "" {
-				addrs = append(addrs, apiv1.EndpointAddress{IP: ip})
-			}
-			if protocol == "" {
-				protocol = "TCP"
-			}
-			if iport, err := strconv.Atoi(port); err == nil {
-				ports = append(ports, apiv1.EndpointPort{Port: int32(iport), Protocol: apiv1.Protocol(protocol)})
-			} else {
-				logger.Fatalf("failed to parse: %s, illegal port", h.UpdateEndpoints)
+			for _, sport := range strings.Split(ports, ",") {
+				mp := rep.FindStringSubmatch(strings.TrimSpace(sport))
+				if len(mp) == 0 {
+					logger.Fatalf("failed to parse: %s, illegal port %s", h.UpdateEndpoints, sport)
+				}
+				port, err := strconv.Atoi(mp[1])
+				if err != nil {
+					logger.Fatalf("failed to parse: %s, illegal port %s", h.UpdateEndpoints, sport)
+				}
+				name, protocol := mp[2], mp[3]
+				if protocol == "" {
+					protocol = "TCP"
+				}
+				if name == "" {
+					name = fmt.Sprintf("%s-%d", strings.ToLower(protocol), port)
+				}
+				eps = append(eps, apiv1.EndpointPort{
+					Name:     name,
+					Port:     int32(port),
+					Protocol: apiv1.Protocol(protocol)})
 			}
 			h.endpointSubsets = []apiv1.EndpointSubset{}
-			if len(addrs) > 0 && len(ports) > 0 {
-				h.endpointSubsets = []apiv1.EndpointSubset{apiv1.EndpointSubset{Addresses: addrs, Ports: ports}}
+			if len(eas) > 0 && len(eps) > 0 {
+				h.endpointSubsets = []apiv1.EndpointSubset{apiv1.EndpointSubset{Addresses: eas, Ports: eps}}
 			}
 		}
 	}
